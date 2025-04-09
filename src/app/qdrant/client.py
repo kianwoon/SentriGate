@@ -7,7 +7,6 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
 from app.core.config import settings
-from app.schemas.search_results import SearchResultItem, SearchResults
 
 
 class QdrantSearchEngine:

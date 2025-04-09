@@ -46,7 +46,7 @@ class AuthService:
         if api_key in self.__class__._api_key_cache:
             timestamp, result = self.__class__._api_key_cache[api_key]
             if current_time - timestamp < self.__class__._cache_ttl:
-                logger.debug(f"Using cached API key result")
+                logger.debug("Using cached API key result")
                 return result
             else:
                 # Remove expired cache entry

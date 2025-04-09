@@ -3,9 +3,13 @@
 from typing import Any, Dict, List
 from numpy import dot
 from numpy.linalg import norm
+import time
+import json
+
 
 from app.core.config import settings
-from app.db.models import Token
+from app.db.models import Token, AuditLog
+from app.db.session import async_session_factory
 from app.qdrant.client import QdrantSearchEngine
 from app.qdrant.embedding import EmbeddingService
 from app.schemas.query import QueryRequest, QueryResponse, ResponseItem
@@ -79,6 +83,40 @@ async def allowItemsInWhitelist(search_results: List[Dict], allow_topics_embeddi
     logger.debug("Applied whitelist boosting to search results")
 
 
+async def log_query_audit(token: Token, collection_name: str, query_request: QueryRequest, 
+                    response: QueryResponse, execution_time_ms: int) -> None:
+    """Log query execution to the audit log table.
+    
+    Args:
+        token: The API token used for the query
+        collection_name: Name of the collection queried
+        query_request: The original query request
+        response: The query response object
+        execution_time_ms: Query execution time in milliseconds
+    """
+    try:
+        # Create a new audit log entry
+        audit_log = AuditLog(
+            token_id=token.id,
+            collection_name=collection_name,
+            query_text=query_request.query,
+            filter_data="allow_rules:" + str(token.allow_rules) + ", deny_rules:" + str(token.deny_rules),
+            result_count=len(response.response),
+            response_data=json.loads(json.dumps(response.dict())),
+            execution_time_ms=execution_time_ms,
+        )
+        
+        # Create a new session for audit logging
+        async with async_session_factory() as session:
+            session.add(audit_log)
+            await session.commit()
+            
+        logger.debug(f"Audit log created for query in collection {collection_name}")
+    except Exception as e:
+        # Don't let audit logging failures affect the main application flow
+        logger.error(f"Failed to save audit log: {str(e)}")
+
+
 class QueryService:
     """Service for handling vector search queries."""
 
@@ -97,11 +135,20 @@ class QueryService:
         Returns:
             QueryResponse: The query response.
         """
+        # Start timing the execution
+        start_time = time.time()
+        response_items = []
 
-        #check collection name exist in qdrant first
+        # Check collection name exist in qdrant first
         if not await self.search_engine.collection_exists(collection_name):
             logger.error(f"Collection {collection_name} does not exist.")
-            return QueryResponse(response=[])
+            response = QueryResponse(response=response_items)
+            
+            # Log the query even when collection doesn't exist
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            await log_query_audit(api_key, collection_name, query_request, response, execution_time_ms)
+            
+            return response
 
         # Embed the query
         embedded_query = self.embedding_service.embed_query(query_request.query)
@@ -140,11 +187,16 @@ class QueryService:
             logger.info(f"Search results: {response_items}")
         except Exception as e:
             logger.error(f"Error searching collection {collection_name}: {str(e)}")
-            # Return a friendly error message
-            response_items = [ 
-            ]
+            # Response_items remains empty
         
-        return QueryResponse(response=response_items)
+        # Create the response object
+        response = QueryResponse(response=response_items)
+        
+        # Calculate execution time and log the audit entry
+        execution_time_ms = int((time.time() - start_time) * 1000)
+        await log_query_audit(api_key, collection_name, query_request, response, execution_time_ms)
+        
+        return response
 
     def _build_filter(self, query_request: QueryRequest, api_key: Token) -> Dict[str, Any]:
         """Build a filter for Qdrant search based on the query request and API key rules.

@@ -1,10 +1,10 @@
 """Database models."""
 
-import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Boolean, Column, DateTime, String, Text, Integer, ForeignKey
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
 
 from app.db.session import Base
 from app.core.config import settings
@@ -32,7 +32,7 @@ class Token(Base):
 
     __tablename__ = "tokens"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     hashed_token = Column(String(255), nullable=False)
@@ -82,3 +82,38 @@ class Token(Base):
             bool: True if valid, False otherwise.
         """
         return self.is_active and not self.is_expired()
+
+
+class AuditLog(Base):
+    """Audit log model for tracking queries and responses.
+    
+    Attributes:
+        id: Primary key integer (auto-incrementing)
+        token_id: Foreign key to the API token used
+        collection_name: Name of the collection queried
+        query_text: The actual query text
+        filter_data: The filters applied to the query
+        result_count: Number of results returned
+        response_data: The full response data returned
+        execution_time_ms: Query execution time in milliseconds
+        created_at: When the query was executed
+    """
+    
+    __tablename__ = "audit_logs"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token_id = Column(Integer, ForeignKey("tokens.id"), nullable=False)
+    collection_name = Column(String(255), nullable=False)
+    query_text = Column(Text, nullable=False)
+    filter_data = Column(JSONB, nullable=True)
+    result_count = Column(Integer, default=0)
+    response_data = Column(JSONB, nullable=True)
+    execution_time_ms = Column(Integer, default=0)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    
+    # Relationship to Token
+    token = relationship("Token", back_populates="audit_logs")
+
+
+# Add relationship to Token class
+Token.audit_logs = relationship("AuditLog", back_populates="token")
