@@ -23,7 +23,9 @@ class EmbeddingService:
         """
         self.model_name = model_name or settings.EMBEDDING_MODEL
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        
         logging.info(f"Initialized EmbeddingService with model: {self.model_name}")
+        logging.info(f"Initialized EmbeddingService with model: {settings.OPENAI_API_KEY}")
     
     def embed_query(self, query: str) -> List[float]:
         """Embed a text query into a vector using OpenAI.

@@ -52,6 +52,7 @@ class QdrantSearchEngine:
             query_vector=vector,
             query_filter=qdrant_filter,
             limit=limit,
+            with_vectors=True
         )
         
         # Format the results
@@ -59,6 +60,7 @@ class QdrantSearchEngine:
             {
                 "score": hit.score,
                 "payload": hit.payload,
+                "vector": hit.vector,
             }
             for hit in search_result
         ]

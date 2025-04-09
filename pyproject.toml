@@ -20,4 +20,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.0",
     "pytz>=2025.2",
     "pydantic>=1.10.2",
+    "pydantic_settings>=0.2.0",
+    "psutil>=7.0.0",
+    "requests>=2.32.2",
 ]

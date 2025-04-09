@@ -5,11 +5,9 @@ This runs as a separate process under supervisord.
 """
 
 import time
-import os
 import logging
 import psutil
 import requests
-from datetime import datetime
 
 # Setup logging
 logging.basicConfig(

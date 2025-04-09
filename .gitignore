@@ -49,3 +49,4 @@ yarn-error.log*
 Thumbs.db
 Analyze_Email_Feature_Plan.md
 knowledge_base_structure.txt
+/tests

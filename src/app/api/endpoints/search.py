@@ -1,13 +1,12 @@
 """General vector search endpoint."""
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.db.models import Token
 from app.db.session import get_db
 from app.schemas.query import QueryRequest, QueryResponse
-from app.services.auth_service import get_current_api_key, AuthService
+from app.services.auth_service import get_current_api_key
 from app.services.query_service import QueryService
 
 
