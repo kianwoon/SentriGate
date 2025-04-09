@@ -1,0 +1,23 @@
+[project]
+name = "vectordbgateway"
+version = "0.1.0"
+description = "API-key secured FastAPI microservice for Qdrant vector database"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "sqlalchemy",
+    "asyncpg",
+    "bcrypt",
+    "qdrant-client",
+    "httpx",
+    "pydantic-settings",
+    "python-dotenv",
+    "openai>=1.0.0",
+    "greenlet>=3.1.1",
+    "asyncio>=3.4.3",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "pytz>=2025.2",
+    "pydantic>=1.10.2",
+]
