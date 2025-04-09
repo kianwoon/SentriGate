@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 from numpy import dot
 from numpy.linalg import norm
 
+from app.core.config import settings
 from app.db.models import Token
 from app.qdrant.client import QdrantSearchEngine
 from app.qdrant.embedding import EmbeddingService
@@ -18,20 +19,13 @@ def cosine_similarity(a, b):
     return dot(a, b) / (norm(a) * norm(b))
 
 
-async def removeItemsInBackList(search_results: List[Dict], deny_rules) -> None:
+async def removeItemsInBackList(search_results: List[Dict], deny_topics_embeddings: List) -> None:
     """Remove items from search results that are similar to denied embeddings.
     
     Args:
         search_results: List of search results to filter
         deny_rules: Rules containing topics to deny
     """
- 
-    
-    # Create embedding service instance
-    embedding_service = EmbeddingService()
-    
-    # Generate embeddings for deny topics
-    deny_embeddings = [embedding_service.embed_query(t) for t in deny_rules]
     
     # Get the indices of items to remove
     indices_to_remove = []
@@ -41,8 +35,8 @@ async def removeItemsInBackList(search_results: List[Dict], deny_rules) -> None:
         
         result_vector = result['vector']
         is_denied = any(
-            cosine_similarity(result_vector, deny_emb) > 0.85  # Similarity threshold
-            for deny_emb in deny_embeddings
+            cosine_similarity(result_vector, deny_emb) > settings.SIMILARITY_THRESHOLD
+            for deny_emb in deny_topics_embeddings
         )
         
         if is_denied:
@@ -55,18 +49,13 @@ async def removeItemsInBackList(search_results: List[Dict], deny_rules) -> None:
     logger.debug(f"Removed {len(indices_to_remove)} items that matched deny list")
 
 
-async def allowItemsInWhitelist(search_results: List[Dict], allow_rules) -> None:
+async def allowItemsInWhitelist(search_results: List[Dict], allow_topics_embeddings: List) -> None:
     """Prioritize items in search results that match allowed embeddings.
     
     Args:
         search_results: List of search results to filter
-        allow_rules: Rules containing topics to allow/boost
-    """ 
-    # Create embedding service instance
-    embedding_service = EmbeddingService()
-    
-    # Generate embeddings for whitelist topics
-    allow_embeddings = [embedding_service.embed_query(t) for t in allow_rules]
+        allow_topics_embeddings: Rules containing topics to allow/boost
+    """  
     
     # Calculate whitelist boost for each result
     for result in search_results:
@@ -76,12 +65,12 @@ async def allowItemsInWhitelist(search_results: List[Dict], allow_rules) -> None
         result_vector = result['vector']
         # Find maximum similarity to any allowed embedding
         whitelist_score = max(
-            [cosine_similarity(result_vector, allow_emb) for allow_emb in allow_embeddings],
+            [cosine_similarity(result_vector, allow_emb) for allow_emb in allow_topics_embeddings],
             default=0
         )
         
         # Apply a boost to the score if similarity is high
-        if whitelist_score > 0.85:  # Similarity threshold
+        if whitelist_score > settings.SIMILARITY_THRESHOLD:
             result['score'] = result['score'] * 1.2  # 20% boost
     
     # Re-sort results by score
@@ -115,8 +104,6 @@ class QueryService:
             return QueryResponse(response=[])
 
         # Embed the query
-
-
         embedded_query = self.embedding_service.embed_query(query_request.query)
         
         logger.debug(f"Embedded query: {query_request.query} -> {embedded_query}")
@@ -126,15 +113,20 @@ class QueryService:
         
         # Search Qdrant with error handling
         try:
+            # Make sure we're getting raw dictionaries, not SearchResultItem objects
             search_results = await self.search_engine.search(
                 collection_name=collection_name,
                 vector=embedded_query,
                 filter_=filter_,
-                limit=query_request.top_k
+                limit=query_request.top_k,
+                with_vector=True  # Make sure vectors are included for similarity checks
             )
-              
-            await removeItemsInBackList(search_results, api_key.deny_rules)
-            await allowItemsInWhitelist(search_results, api_key.allow_rules)
+            
+            # Skip filtering if the embeddings lists are None or empty
+            if api_key.deny_embeddings:
+                await removeItemsInBackList(search_results, api_key.deny_embeddings)
+            if api_key.allow_embeddings:  
+                await allowItemsInWhitelist(search_results, api_key.allow_embeddings)
             
             # Format the results with the correct schema
             response_items = [
@@ -205,4 +197,4 @@ class QueryService:
                 if key in query_request.filter:
                     filter_[key] = query_request.filter[key]
         
-        return filter_    
+        return filter_

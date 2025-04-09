@@ -7,6 +7,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
 from app.core.config import settings
+from app.schemas.search_results import SearchResultItem, SearchResults
 
 
 class QdrantSearchEngine:
@@ -29,6 +30,7 @@ class QdrantSearchEngine:
         vector: List[float],
         filter_: Optional[Dict[str, Any]] = None,
         limit: int = 5,
+        with_vector: bool = True
     ) -> List[Dict[str, Any]]:
         """Search for vectors in Qdrant.
         
@@ -37,6 +39,7 @@ class QdrantSearchEngine:
             vector: Embedded query vector.
             filter_: Optional filter to apply to the search.
             limit: Maximum number of results to return.
+            with_vector: Whether to include vectors in the response.
             
         Returns:
             List[Dict[str, Any]]: List of search results.
@@ -52,18 +55,19 @@ class QdrantSearchEngine:
             query_vector=vector,
             query_filter=qdrant_filter,
             limit=limit,
-            with_vectors=True
+            with_vectors=with_vector
         )
         
-        # Format the results
+        # Format the results as plain dictionaries
         return [
             {
                 "score": hit.score,
                 "payload": hit.payload,
-                "vector": hit.vector,
+                "vector": hit.vector if with_vector else None,
             }
             for hit in search_result
         ]
+         
     
     async def list_collections(self) -> List[str]:
         """List all collections in Qdrant.

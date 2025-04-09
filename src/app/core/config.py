@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     # Model settings
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     OPENAI_API_KEY: str = ""
+    SIMILARITY_THRESHOLD: float = 0.75  # Threshold for vector similarity matching
 
     # Add JWT authentication settings
     JWT_SECRET: str

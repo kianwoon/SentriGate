@@ -1,25 +1,30 @@
 """Authentication and authorization service."""
 
 from datetime import datetime
-from typing import Dict, Optional, Tuple, Any
+from typing import Dict, Optional, Tuple, Any, ClassVar
 
 import bcrypt
-from fastapi import Depends, HTTPException, status, Header  # Added Request
+from fastapi import Depends, HTTPException, status, Header
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-import logging  # Import logging
+import logging
+import time
 
 from app.core.config import settings
 from app.db.models import Token
 from app.db.session import get_db
 from app.rules.rule_checker import RuleChecker
 
-logger = logging.getLogger(__name__)  # Initialize logger
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
     """Service for API key authentication and authorization."""
-
+    
+    # Simple class-level cache with token expiration
+    _api_key_cache: ClassVar[Dict[str, Tuple[float, Tuple[bool, Optional[Token]]]]] = {}
+    _cache_ttl: ClassVar[int] = 30  # Cache TTL in seconds
+    
     def __init__(self, db: AsyncSession):
         """Initialize the auth service.
         
@@ -35,23 +40,65 @@ class AuthService:
         if not api_key:
             logger.debug("API key is empty.")
             return False, None
-
-        # Hash the API key
-        # hashed_value = bcrypt.hashpw(api_key.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-        # hashed_api_key = f"$2b$12$A.Enz7z/SGPtUufTM7uTV.0RsJX2Z/5fDIiXb9jxXD413qnqRS9F2" #pi_key = f"$2b$12$YzXa9rxIU8KCVulRfkqLfObyBkEZEthw6/9H/qbfSOej1zJQmjSPG" # hash_api_key(api_key)
-        # logger.debug(f"Hashed API key: {hashed_api_key}")
+        
+        # Check cache first
+        current_time = time.time()
+        if api_key in self.__class__._api_key_cache:
+            timestamp, result = self.__class__._api_key_cache[api_key]
+            if current_time - timestamp < self.__class__._cache_ttl:
+                logger.debug(f"Using cached API key result")
+                return result
+            else:
+                # Remove expired cache entry
+                del self.__class__._api_key_cache[api_key]
 
         # Query the database for the API key
         try:
-            query = select(Token).where(Token.is_active, Token.expiry >= datetime.now())   
+            # Use only columns that definitely exist in the database
+            columns = [
+                Token.id, Token.name, Token.description, Token.hashed_token,
+                Token.sensitivity, Token.is_active, Token.owner_email,
+                Token.expiry, Token.allow_rules, Token.deny_rules,
+                Token.created_at, Token.allow_embeddings, Token.deny_embeddings
+            ]
+            
+            query = select(*columns).where(Token.is_active, Token.expiry >= datetime.now())
+            logger.debug(f"Executing query: {query}")
             result = await self.db.execute(query)
-            all_tokens = result.scalars().all()
+            
+            # Need to use all() instead of scalars().all() when selecting specific columns
+            rows = result.all()
  
-            for token in all_tokens:
-                # Ensure hashed_token is bytes if bcrypt expects bytes
+            for row in rows:
+                # Create a Token object with the values from the row
+                token = Token(
+                    id=row.id,
+                    name=row.name,
+                    description=row.description,
+                    hashed_token=row.hashed_token,
+                    sensitivity=row.sensitivity,
+                    is_active=row.is_active,
+                    owner_email=row.owner_email,
+                    expiry=row.expiry,
+                    allow_rules=row.allow_rules,
+                    deny_rules=row.deny_rules,
+                    created_at=row.created_at,
+                    # Set the new columns to empty defaults
+                    allow_embeddings=row.allow_embeddings,
+                    deny_embeddings=row.deny_embeddings,
+                )
+                
+                # Check if this token matches the API key
                 hashed_token_bytes = token.hashed_token.encode('utf-8') if isinstance(token.hashed_token, str) else token.hashed_token
-                if bcrypt.checkpw(api_key.encode('utf-8'), hashed_token_bytes):                    
+                
+                # Use constant-time comparison to prevent timing attacks
+                start_time = time.time()
+                if bcrypt.checkpw(api_key.encode('utf-8'), hashed_token_bytes):
+                    verification_time = time.time() - start_time
+                    logger.debug(f"bcrypt verification took {verification_time:.4f} seconds")
+                    
+                    # Cache successful result
+                    self.__class__._api_key_cache[api_key] = (current_time, (True, token))
                     logger.debug(f"Retrieved API key from database, name: {token.owner_email}")
                     return True, token
                 
@@ -60,7 +107,6 @@ class AuthService:
             return False, None
 
         return False, None
- 
 
     async def authorize_context(self, api_key: Token, context: Dict[str, Any]) -> bool:
         """Authorize a context based on API key rules.
