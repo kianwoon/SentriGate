@@ -23,7 +23,7 @@ class AuthService:
     
     # Simple class-level cache with token expiration
     _api_key_cache: ClassVar[Dict[str, Tuple[float, Tuple[bool, Optional[Token]]]]] = {}
-    _cache_ttl: ClassVar[int] = 30  # Cache TTL in seconds
+    _cache_ttl: ClassVar[int] = 10  # Cache TTL in seconds
     
     def __init__(self, db: AsyncSession):
         """Initialize the auth service.
@@ -59,7 +59,7 @@ class AuthService:
                 Token.id, Token.name, Token.description, Token.hashed_token,
                 Token.sensitivity, Token.is_active, Token.owner_email,
                 Token.expiry, Token.allow_rules, Token.deny_rules,
-                Token.created_at, Token.allow_embeddings, Token.deny_embeddings
+                Token.created_at
             ]
             
             query = select(*columns).where(Token.is_active, Token.expiry >= datetime.now())
@@ -82,10 +82,7 @@ class AuthService:
                     expiry=row.expiry,
                     allow_rules=row.allow_rules,
                     deny_rules=row.deny_rules,
-                    created_at=row.created_at,
-                    # Set the new columns to empty defaults
-                    allow_embeddings=row.allow_embeddings,
-                    deny_embeddings=row.deny_embeddings,
+                    created_at=row.created_at
                 )
                 
                 # Check if this token matches the API key

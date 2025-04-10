@@ -2,12 +2,14 @@
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import logger
+import logging  # Replace fastapi import with standard logging
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
 from app.core.config import settings
 
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 class QdrantSearchEngine:
     """Client for searching Qdrant vector database.
@@ -47,7 +49,7 @@ class QdrantSearchEngine:
         qdrant_filter = None
         if filter_:
             qdrant_filter = self._build_filter(filter_)
-        
+
         # Perform the search
         search_result = self.client.search(
             collection_name=collection_name,

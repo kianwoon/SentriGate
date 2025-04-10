@@ -24,8 +24,6 @@ class Token(Base):
         expiry: Expiration timestamp
         allow_rules: Rules to allow (e.g., context match)
         deny_rules: Rules to deny (takes precedence over allow_rules)
-        allow_topics_embeddings: Pre-computed embeddings for allowed topics
-        deny_topics_embeddings: Pre-computed embeddings for denied topics
         created_at: Creation timestamp
         updated_at: Last update timestamp
     """
@@ -42,10 +40,7 @@ class Token(Base):
     expiry = Column(DateTime, nullable=True)
     allow_rules = Column(JSONB, nullable=True)
     deny_rules = Column(JSONB, nullable=True)
-    allow_embeddings = Column(JSONB, nullable=True)
-    deny_embeddings = Column(JSONB, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def get_collection_name(self) -> str:
         """Get the collection name for this token.
