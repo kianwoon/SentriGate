@@ -143,12 +143,12 @@ class QueryService:
 
         if api_key.allow_rules:
             for allow_rule in api_key.allow_rules:
-                must_conditions.append({"key": "metadata.tags", "match": {"value": allow_rule}})
+                must_conditions.append({"key": "metadata.tags", "match": {"value": str.lower(allow_rule)}})
             logger.info(f"Allow rules: {api_key.allow_rules}")
 
         if api_key.deny_rules:
             for deny_rule in api_key.deny_rules:
-                must_not_conditions.append({"key": "metadata.tags", "match": {"value": deny_rule}})
+                must_not_conditions.append({"key": "metadata.tags", "match": {"value": str.lower(deny_rule)}})
             logger.info(f"Deny rules: {api_key.deny_rules}")
  
  
